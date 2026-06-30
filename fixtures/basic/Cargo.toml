@@ -1,0 +1,8 @@
+[package]
+name = "basic-fixture"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+sema = { path = "../.." }
+syn = { version = "2.0", features = ["full"] }
