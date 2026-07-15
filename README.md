@@ -1,47 +1,10 @@
 # sema
 
-Semantic analysis tool for Rust codebases, built on rust-analyzer's backend. Designed for use in `build.rs` scripts to power proc-macro code generation — query structs, enums, traits, impls, and functions with full type relationships resolved.
+Semantic analysis tool for Rust codebases, designed to power proc-macro code generation by querying structs, enums, traits, impls, and functions with full type relationships resolved.
 
 ## How it works
 
-`sema` loads a Cargo workspace via `ra_ap_load_cargo`, walks the HIR module tree to collect all local items, converts them to `syn` AST nodes for downstream manipulation, and indexes the relationships (impl→struct, impl→trait) so they can be queried by name.
-
-The pipeline is:
-
-```
-load_workspace_at()  →  analyse::collect()  →  bridge::build_workspace()  →  Workspace
-      (RA/HIR)              (walk HIR)            (convert to syn + index)     (query API)
-```
-
-## Usage
-
-Add to `build-dependencies` in your crate's `Cargo.toml`:
-
-```toml
-[build-dependencies]
-sema = { path = "../sema" }
-```
-
-Then in `build.rs`:
-
-```rust
-fn main() {
-    let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-    let path = std::path::Path::new(&manifest).join("Cargo.toml");
-
-    let ws = sema::analysis(sema::Config { manifest_path: path }).unwrap();
-
-    // Tell Cargo to re-run this script if any source file changes
-    ws.emit_rerun_directives();
-
-    // Query the workspace
-    for s in ws.structs().with_attribute("my_macro").collect() {
-        println!("Found annotated struct: {}", s.node.ident);
-    }
-}
-```
-
-## Query API
+`sema` walks a src/ directory and parses every file using `syn` AST nodes for downstream manipulation, and indexes the relationships (impl→struct, impl→trait) by id so they can be queried by name.
 
 All queries start from `Workspace` and return a chainable `Query<T>`:
 
@@ -50,12 +13,12 @@ All queries start from `Workspace` and return a chainable `Query<T>`:
 ws.structs()
   .named("Foo")                        // exact name match
   .public()                            // pub visibility only
-  .in_module("crate::motor")           // module path prefix
+  .in_module("motor")           // module path prefix
   .with_attribute("derive_thing")      // has #[derive_thing]
   .named_matching(|n| n.ends_with("State"))
   .collect()                           // → Vec<&ResolvedStruct>
 
-// Enums, traits, impls, functions — same combinators
+// Enums, traits, impls, functions
 ws.enums().public().collect()
 ws.traits().named("Device").collect()
 ws.impls().in_module("crate::motor").collect()
@@ -97,10 +60,13 @@ i.trait_.resolved    // Option<ItemId> — links to the trait
 t.node   // syn::ItemTrait — all method signatures
 ```
 
-## Limitations
+However the limitations are: 
 
-- Only analyzes crates local to the workspace (`no_deps: true`). Std and external crate items are excluded.
-- Must run inside a `build.rs` — requires `OUT_DIR` env var for the intermediate target directory.
+- analyzes exactly one crate target (the file passed as entry, analysis() always uses src/lib.rs); other targets in the same package (e.g. src/bin/*.rs) aren't walked.
 - `module_path` is empty for items defined at the crate root (`lib.rs`).
-- Type disambiguation for impls is name-based: if two types in the same workspace share a name, impl resolution may link to the wrong one.
-- Proc-macro expansion is disabled (`ProcMacroServerChoice::None`) — items inside proc-macro-generated code won't appear.
+
+- use-statement resolution isn't implemented. ItemRef.resolved can come back None for a trait/type referenced via use rather than its full path, even though .written and the item's own discovery are unaffected.
+
+- Path resolution only handles a single trailing segment past a type/module (no multi-hop associated-item paths).
+
+- Type disambiguation for impls is name-based" (no type inference at all, purely name/path matching)

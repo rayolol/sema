@@ -99,6 +99,7 @@ impl Workspace {
         Query::new(self.impls.iter())
     }
     pub fn emit_rerun_directives(&self) {
+        println!("cargo:rerun-if-changed=Cargo.toml");
         for file in &self.files {
             println!("cargo:rerun-if-changed={}", file.display());
         }
@@ -138,5 +139,15 @@ impl Workspace {
         self.struct_by_id
             .get(&id)
             .and_then(|&idx| self.structs.get(idx))
+    }
+
+    /// True if any impl block targets this id as its self type (struct or enum).
+    pub fn has_impls_for(&self, id: ItemId) -> bool {
+        self.impls_by_self_ty.contains_key(&id)
+    }
+
+    /// True if at least one impl block implements this trait.
+    pub fn has_implementors(&self, trait_id: ItemId) -> bool {
+        self.impls_by_trait.contains_key(&trait_id)
     }
 }

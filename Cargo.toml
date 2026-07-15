@@ -10,17 +10,8 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.103"
-
-ra_ap_ide_db = "=0.0.339"
-ra_ap_vfs = "=0.0.339"
-ra_ap_syntax = "=0.0.339"
-ra_ap_paths = "=0.0.339"
-ra_ap_load-cargo    = "=0.0.339"
-ra_ap_project_model = "=0.0.339"
-ra_ap_base_db       = "=0.0.339"
-ra_ap_hir           = "=0.0.339"
-camino              = "1"
+resolve = { path = "resolve" }
 
 syn = { version = "2.0", features = ["full", "derive"] }
-fnv = "1.0.7"
+quote = "1.0"
 

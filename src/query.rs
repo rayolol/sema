@@ -6,6 +6,26 @@ pub struct StructQuery<'a> {
     items: Box<dyn Iterator<Item = &'a ResolvedStruct> + 'a>,
 }
 
+// `#[derive(Foo, Bar)]` stores its macro paths as the attribute's argument
+// list, not as the attribute path itself (that's always "derive") — so
+// with_attribute("Foo") can't see it; the args need parsing.
+fn has_derive(attrs: &[syn::Attribute], name: &str) -> bool {
+    attrs.iter().any(|attr| {
+        if !attr.path().is_ident("derive") {
+            return false;
+        }
+        let paths = attr.parse_args_with(
+            syn::punctuated::Punctuated::<syn::Path, syn::Token![,]>::parse_terminated,
+        );
+        match paths {
+            Ok(paths) => paths
+                .iter()
+                .any(|p| p.segments.last().is_some_and(|s| s.ident == name)),
+            Err(_) => false,
+        }
+    })
+}
+
 pub trait SemaItem {
     fn attrs(&self) -> &[syn::Attribute];
     fn module_path(&self) -> String;
@@ -13,6 +33,7 @@ pub trait SemaItem {
     fn file(&self) -> &std::path::Path;
     fn name(&self) -> String;
     fn is_public(&self) -> bool;
+    fn has_impls(&self, workspace: &crate::workspaces::Workspace) -> bool;
 }
 
 pub struct Query<'a, T: ?Sized> {
@@ -33,7 +54,9 @@ impl<'a, T: SemaItem + ?Sized> Query<'a, T> {
         self.filter(move |item| item.attrs().iter().any(|a| a.path().is_ident(name)))
     }
 
-    // TODO add with derive later
+    pub fn with_derive(self, name: &'a str) -> Self {
+        self.filter(move |item| has_derive(item.attrs(), name))
+    }
 
     pub fn named(self, name: &'a str) -> Self {
         self.filter(move |item| item.name() == name)
@@ -67,11 +90,11 @@ impl<'a, T: SemaItem + ?Sized> Query<'a, T> {
         self.items.into_iter().next().is_some()
     }
 
-    pub fn with_impl(self, workspace: &crate::workspaces::Workspace) -> Self
+    pub fn with_impl(self, workspace: &'a crate::workspaces::Workspace) -> Self
     where
         T: 'a,
     {
-        self.filter(move |_item| true) // placeholder - will enhance per type
+        self.filter(move |item| item.has_impls(workspace))
     }
 }
 
@@ -103,6 +126,9 @@ impl SemaItem for ResolvedStruct {
     fn is_public(&self) -> bool {
         matches!(self.node.vis, syn::Visibility::Public(_))
     }
+    fn has_impls(&self, workspace: &crate::workspaces::Workspace) -> bool {
+        workspace.has_impls_for(self.id)
+    }
 }
 
 impl SemaItem for ResolvedFunction {
@@ -123,6 +149,9 @@ impl SemaItem for ResolvedFunction {
     }
     fn is_public(&self) -> bool {
         matches!(self.node.vis, syn::Visibility::Public(_))
+    }
+    fn has_impls(&self, _workspace: &crate::workspaces::Workspace) -> bool {
+        false
     }
 }
 
@@ -145,6 +174,9 @@ impl SemaItem for ResolvedEnum {
     fn is_public(&self) -> bool {
         matches!(self.node.vis, syn::Visibility::Public(_))
     }
+    fn has_impls(&self, workspace: &crate::workspaces::Workspace) -> bool {
+        workspace.has_impls_for(self.id)
+    }
 }
 
 impl SemaItem for ResolvedTrait {
@@ -165,6 +197,9 @@ impl SemaItem for ResolvedTrait {
     }
     fn is_public(&self) -> bool {
         matches!(self.node.vis, syn::Visibility::Public(_))
+    }
+    fn has_impls(&self, workspace: &crate::workspaces::Workspace) -> bool {
+        workspace.has_implementors(self.id)
     }
 }
 
@@ -203,7 +238,9 @@ impl SemaItem for ResolvedImpl {
         format!("impl{}", self.module_path)
     }
     fn is_public(&self) -> bool {
-        //FIXME: impls don't have visibility
+        false
+    }
+    fn has_impls(&self, _workspace: &crate::workspaces::Workspace) -> bool {
         false
     }
 }

@@ -1,5 +1,6 @@
-use std::hash::Hasher;
 use std::path::PathBuf;
+
+pub use resolve::ItemId;
 
 pub struct ResolvedStruct {
     pub id: ItemId,
@@ -48,21 +49,6 @@ pub struct ItemRef {
     pub resolved: Option<ItemId>, // points to known item if resolvable
     pub generics: Vec<ItemRef>,
     pub kind: ItemKind,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ItemId(u64);
-
-impl ItemId {
-    pub fn from_name(module_path: &str, name: &str) -> Self {
-        let full = format!("{}::{}", module_path, name);
-        let mut hasher = fnv::FnvHasher::with_key(0);
-        hasher.write(full.as_bytes());
-        ItemId(hasher.finish())
-    }
-    pub fn value(&self) -> u64 {
-        self.0
-    }
 }
 
 #[derive(Debug, Clone)]

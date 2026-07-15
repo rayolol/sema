@@ -4,6 +4,7 @@ fn main() {
 
     let ws = sema::analysis(sema::Config {
         manifest_path: path,
+        target_dir: "OUT_DIR".into(),
     })
     .unwrap();
 
@@ -137,7 +138,10 @@ fn main() {
                 };
                 println!(
                     "cargo:warning=    method: fn {}{}{}({})",
-                    async_str, unsafe_str, method.sig.ident, method.sig.inputs.len()
+                    async_str,
+                    unsafe_str,
+                    method.sig.ident,
+                    method.sig.inputs.len()
                 );
             }
         }
